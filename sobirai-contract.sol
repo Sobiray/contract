@@ -44,7 +44,7 @@ contract Sobirai {
     }
     
         
-    function getEvent(bytes32 evId) public returns( EVENT_STATUS status,
+    function getEvent(bytes32 evId) public view returns( EVENT_STATUS status,
                                                             bytes32 eventId,
                                                             uint successSum,
                                                             uint currentSum,
@@ -68,39 +68,79 @@ contract Sobirai {
         }
     }
     
-    function startPresale(bytes32 eventId){
-        EVENT_STATUS event_status;
-        (event_status, )= getEvent(eventId);
-        if (event_status ==EVENT_STATUS.CREATED){
-            getEvent(eventId).status = EVENT_STATUS.FUNDRASING;
+    function getEventStatus(bytes32 eventId) public view returns (EVENT_STATUS status){
+        uint successSum;
+        uint currentSum;
+        uint maxGuestsCount;
+        uint presaleCost;
+        uint saleCost;
+        uint256 endPresaleDate;
+  
+        (status, eventId, successSum, currentSum, maxGuestsCount, presaleCost, saleCost, endPresaleDate)= getEvent(eventId);
+    }
+    
+    function setEventStatus(bytes32 evId, EVENT_STATUS status) public 
+    {
+        for (uint i=0; i<events.length; i++) {
+          if (events[i].eventId == evId) {
+            Event storage e = events[i];
+            e.status = status;
+            break;
+        }
+     }
+    }
+    
+    function changeEventCurrentSum(bytes32 evId, uint delta) private 
+    {
+        for (uint i=0; i<events.length; i++) {
+          if (events[i].eventId == evId) {
+            Event storage e = events[i];
+            e.currentSum = e.currentSum + delta;
+            break;
+        }
+     }
+    }
+    
+    function startPresale(bytes32 eventId) public{
+    EVENT_STATUS status = getEventStatus(eventId);
+    if (status == EVENT_STATUS.CREATED){
+            setEventStatus(eventId, EVENT_STATUS.FUNDRASING);
         }
     }
     
-    function cancelPresale(bytes32 eventId){
-        Event storage e = getEvent(eventId);
-        if (e.status==EVENT_STATUS.FUNDRASING){
-            e.status = EVENT_STATUS.CANCELED;
+    function cancelPresale(bytes32 eventId) public{
+    EVENT_STATUS status = getEventStatus(eventId);
+    if (status == EVENT_STATUS.FUNDRASING){
+            setEventStatus(eventId, EVENT_STATUS.CANCELED);
         }
     }
     
-    function failPresale(bytes32 eventId){
-        Event storage e = getEvent(eventId);
-        if (e.status==EVENT_STATUS.FUNDRASING){
-            e.status = EVENT_STATUS.FAILED;
+    function failPresale(bytes32 eventId) public{
+    EVENT_STATUS status = getEventStatus(eventId);
+    if (status == EVENT_STATUS.FUNDRASING){
+            setEventStatus(eventId, EVENT_STATUS.FAILED);
         }
     }
     
-    function successPresale(bytes32 eventId){
-        Event storage e = getEvent(eventId);
-        if (e.status==EVENT_STATUS.FUNDRASING){
-            e.status = EVENT_STATUS.SUCCESS;
+    function successPresale(bytes32 eventId) public{
+    EVENT_STATUS status = getEventStatus(eventId);
+    if (status == EVENT_STATUS.FUNDRASING){
+            setEventStatus(eventId, EVENT_STATUS.SUCCESS);
         }
     }
     
-    function checkEndPresale(bytes32 eventId){
-        Event storage e = getEvent(eventId);
-        if (e.endPresaleDate<now){
-            if (e.currentSum>=e.successSum){
+    function checkEndPresale(bytes32 eventId) public{
+        EVENT_STATUS status;
+        uint successSum;
+        uint currentSum;
+        uint maxGuestsCount;
+        uint presaleCost;
+        uint saleCost;
+        uint256 endPresaleDate;
+  
+        (status, eventId, successSum, currentSum, maxGuestsCount, presaleCost, saleCost, endPresaleDate)= getEvent(eventId);
+        if (endPresaleDate<now){
+            if (currentSum>=successSum){
                 successPresale(eventId);
             }
             else{
@@ -111,40 +151,37 @@ contract Sobirai {
     
     function addGuest(
         bytes32 eventId,
-        bytes32 guestId,
-        uint256 buyDate) 
+        bytes32 guestId) 
     public {
         guests[eventId].push(Guest(
             {eventId : eventId, 
             guestId : guestId,
-            buyDate: 0    
+            payDate: 0    
             }
             )
         );
     }
     
-    
-    function getGuest (bytes32 eventId, bytes32 guestId) view returns (Guest){
+    function setGuestPayDate(bytes32 eventId, bytes32 guestId, uint256 date) private{
         Guest[] storage event_guests = guests[eventId];
         for (uint j=0; j<event_guests.length; j++) {
             if (event_guests[j].guestId == guestId) {
-                return event_guests[j];
+                Guest storage g = event_guests[j];
+                g.payDate = date;
             }
         }
     }
     
-    function guestPaid(bytes32 eventId, bytes32 guestId, uint sum){
-        Event storage e = getEvent(eventId);
-        Guest storage g = getGuest(eventId, guestId);
-        g.payDate = now;
+    function guestPaid(bytes32 eventId, bytes32 guestId, uint sum) public{
+        EVENT_STATUS status = getEventStatus(eventId);
+        setGuestPayDate(eventId, guestId, now);
         checkEndPresale(eventId);
-        if (e.status == EVENT_STATUS.FUNDRASING){
-            e.currentSum = e.currentSum + sum;
+        if (status == EVENT_STATUS.FUNDRASING){
+            changeEventCurrentSum(eventId, sum);
         }
-        if (e.status == EVENT_STATUS.SUCCESS){
-            e.currentSum = e.currentSum + sum;
+        if (status == EVENT_STATUS.SUCCESS){
+            changeEventCurrentSum(eventId, sum);
         }
     }
-
 
 }
